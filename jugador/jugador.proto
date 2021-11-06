@@ -1,0 +1,37 @@
+syntax = "proto3";
+
+package jugador;
+
+option go_package = "example.com/go-jugador-grpc;go_jugador_grpc";
+
+service Jugadores {
+    rpc EnviarSolicitud (Peticion) returns (Respuesta) {}
+    rpc EnviarInicio (Inicio) returns (Juego) {}
+    rpc EnviarJugada (Numero) returns (Estado) {}
+}
+ 
+message Peticion{
+    string peticion = 1;
+}
+
+message Respuesta {
+    string mensaje = 1;
+}
+
+message Inicio{
+    string inicio = 1;
+}
+
+message Juego{
+    string juego = 1;
+}
+
+message Numero{
+    int32 numero = 1;
+    int32 jugador = 2;
+}
+
+message Estado{
+    string estado = 1;
+    int32 ronda = 2;
+}
