@@ -1,5 +1,2 @@
-build:
-	go build -o bin/lider lider.go
-
-run:
+lider:
 	go run lider.go

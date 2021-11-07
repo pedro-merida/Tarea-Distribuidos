@@ -7,6 +7,7 @@ import (
 	"math"
 	"math/rand"
 	"net"
+	"os"
 	"time"
 
 	pb "example.com/go-jugador-grpc/jugador"
@@ -14,10 +15,10 @@ import (
 )
 
 var cantidadJugadores int = 0
-var etapa int = 2 ////Etapa donde se parte: 0 = primer juego, 1= segundo juego, 2= tercer juego
-var etapaOpcion int = 1
+var etapa int = 0 ////Etapa donde se parte: 0 = primer juego, 1= segundo juego, 2= tercer juego
 var eleccion_lider int = 0
 var jugadores []int
+var jugadoresEtapa1 []int
 var sumaetapa1 []int
 var jugadoresVivos int = 16
 var jugadoresMuertos int = 0
@@ -37,6 +38,10 @@ var TodoNada []int
 var ListoTodoNada int = 0
 var ListoTodoNada2 int = 0
 var toychato3 = true
+var toychato1 = true
+var jugadoresEnviar int = 0
+var jugadoresVivosEtapa2 int
+var terminar = false
 
 const (
 	port = ":50051"
@@ -68,6 +73,17 @@ func etapa3() int {
 
 func remove(slice []int, s int) []int {
 	return append(slice[:s], slice[s+1:]...)
+}
+
+func findAndDelete(s []int, item int) []int {
+	index := 0
+	for _, i := range s {
+		if i != item {
+			s[index] = i
+			index++
+		}
+	}
+	return s[:index]
 }
 
 func (s *server) EnviarSolicitud(ctx context.Context, in *pb.Peticion) (*pb.Respuesta, error) {
@@ -106,6 +122,7 @@ func (s *server) EnviarJugada(ctx context.Context, in *pb.Numero) (*pb.Estado, e
 	estado := ""
 	equipo := 1
 	cantidad := time.Duration(100 * int(jugador))
+	ronda_local := ronda
 
 	time.Sleep(250 * time.Millisecond)
 
@@ -123,24 +140,37 @@ func (s *server) EnviarJugada(ctx context.Context, in *pb.Numero) (*pb.Estado, e
 	jugadoresRespuestas++
 	time.Sleep(cantidad * time.Millisecond)
 
-	fmt.Println(jugadoresRespuestas)
+	//fmt.Println(jugadoresRespuestas)
+	time.Sleep(100 * time.Millisecond)
 	if etapa == 1 {
-		index := 0
-		for i := 0; i < len(jugadores); i++ {
+		index := jugador - 1
+
+		/*for i := 0; i < len(jugadores); i++ {
 			if jugadores[i] == int(jugador) {
 				index = i
 				break
 			}
+		}*/
+
+		if jugadoresRespuestas == jugadoresActivos {
+			toychato1 = false
 		}
 
+		for toychato1 {
+
+		} //Todos han enviado su respuesta
+		time.Sleep(cantidad * time.Millisecond)
+		ronda_local++
+
+		esperaEtapa = true
 		fmt.Println(">> El jugador ", jugador, " ha escogido ", mensaje)
 		if int(mensaje) >= eleccion_lider {
 			//RIP
 			jugadoresMuertos++
 			//Quitar jugador que murio de la lista
 
-			jugadores = remove(jugadores, index)
-			sumaetapa1 = remove(sumaetapa1, index)
+			jugadoresEtapa1[index] = -1
+			sumaetapa1[index] = -1
 
 			fmt.Println(">> ***BANG!!**  El jugador ", jugador, " ha muerto")
 			estado = "Morir"
@@ -151,18 +181,19 @@ func (s *server) EnviarJugada(ctx context.Context, in *pb.Numero) (*pb.Estado, e
 			sumaetapa1[index] = sumaetapa1[index] + int(mensaje)
 			estado = "Vivir"
 			//Si su suma es mayor a 21
-			if sumaetapa1[index] >= 10 {
+			if sumaetapa1[index] >= 15 {
+				estado = "Ronda"
 				fmt.Println(">> Jugador ", jugador, " ha ganado la etapa")
 				jugadoresGanadores++
 				ganar = true //Si ha ganado la etapa
 				//return &pb.Estado{Estado: "Vivir", Ronda: int32(-1)}, nil
-			} else if sumaetapa1[index] < 10 && ronda == 4 { //En la ultima ronda no llegaron a 21   ///**********************//////////////Se modifico para testeos AAAAAAHHHHHHHHH
+			} else if sumaetapa1[index] < 15 && ronda == 4 { //En la ultima ronda no llegaron a 21   ///**********************//////////////Se modifico para testeos AAAAAAHHHHHHHHH
 				//RIP
 				jugadoresMuertos++
 				//Quitar jugador que murio de la lista
 
-				jugadores = remove(jugadores, index)
-				sumaetapa1 = remove(sumaetapa1, index)
+				jugadoresEtapa1[index] = -1
+				sumaetapa1[index] = -1
 
 				fmt.Println(">> ***BANG!!**  El jugador ", jugador, " ha muerto por no llegar a 21")
 				estado = "Morir"
@@ -172,8 +203,7 @@ func (s *server) EnviarJugada(ctx context.Context, in *pb.Numero) (*pb.Estado, e
 		}
 
 		//fmt.Println("Jugadores activos: ", jugadoresActivos)
-
-		if jugadoresRespuestas == jugadoresActivos { //Si todos los jugadores han enviado su respuesta
+		if jugadoresEnviar == jugadoresActivos-1 { //Si todos los jugadores han enviado su respuesta
 			ronda++
 			eleccion_lider = etapa1() //Cambiar el random?
 			jugadoresRespuestas = 0   //Inicializar jugadoresRespuesta
@@ -182,17 +212,19 @@ func (s *server) EnviarJugada(ctx context.Context, in *pb.Numero) (*pb.Estado, e
 			jugadoresMuertos = 0
 			jugadoresGanadores = 0
 
-			esperaEtapa = true //Para que no puedan volver seguir con otra etapa del juego mientras se ejecuta esta
-
-			if jugadoresVivos == 1 {
+			//Para que no puedan volver seguir con otra etapa del juego mientras se ejecuta esta
+			toychato1 = true
+			if jugadoresVivos == 1 && jugadoresEtapa1[index] != -1 {
 				fmt.Println(">> El jugador", jugador, " ha ganado el juego")
 				jugadoresActivos--
+				terminar = true
 				return &pb.Estado{Estado: "Ganador", Ronda: int32(-1)}, nil
+
 			}
 
 			if ronda < 5 {
 				fmt.Println(">> La ronda ", ronda, " ha comenzado")
-				fmt.Println(">>> El lider ha escogido ", eleccion_lider)
+				//fmt.Println(">>> El lider ha escogido ", eleccion_lider)
 
 			} else { //Ronda 5: Si siguen vivos y su suma es menor a 21, mueren
 				//RIP
@@ -210,7 +242,9 @@ func (s *server) EnviarJugada(ctx context.Context, in *pb.Numero) (*pb.Estado, e
 				//Jugadores activos = jugadoresvivos para resetear
 				jugarEtapa = false
 			}
-			fmt.Println(">> Quedan ", jugadoresVivos, " jugadores vivos y ", jugadoresActivos, " jugadores activos.")
+			jugadoresEnviar = 0
+			//fmt.Println(">> Quedan ", jugadoresVivos, " jugadores vivos y ", jugadoresActivos, " jugadores activos.")
+			return &pb.Estado{Estado: estado, Ronda: int32(ronda)}, nil
 		}
 	} else if etapa == 2 {
 		index := 0
@@ -227,7 +261,7 @@ func (s *server) EnviarJugada(ctx context.Context, in *pb.Numero) (*pb.Estado, e
 			return &pb.Estado{Estado: estado, Ronda: int32(ronda)}, nil
 		}
 
-		fmt.Println(">> El jugador ", jugador, " ha escogido ", mensaje)
+		//fmt.Println(">> El jugador ", jugador, " ha escogido ", mensaje)
 
 		if equipo == 1 {
 			suma_primero += int(mensaje)
@@ -242,10 +276,12 @@ func (s *server) EnviarJugada(ctx context.Context, in *pb.Numero) (*pb.Estado, e
 		for sumaetapa2 { //Esperar que todos envien sus numeros
 		}
 
+		time.Sleep(cantidad * time.Millisecond)
+
 		jugadoresRespuestas = 0
 
-		fmt.Println("suma del equipo 1: ", suma_primero)
-		fmt.Println("suma del equipo 2: ", suma_segundo)
+		//fmt.Println("suma del equipo 1: ", suma_primero)
+		//fmt.Println("suma del equipo 2: ", suma_segundo)
 		paridad_lider := eleccion_lider % 2
 
 		if suma_primero%2 != paridad_lider && suma_segundo%2 != paridad_lider {
@@ -293,12 +329,18 @@ func (s *server) EnviarJugada(ctx context.Context, in *pb.Numero) (*pb.Estado, e
 			}
 		}
 
-		if jugadoresVivos == 1 {
+		jugadoresEnviar++
+		/*
+			for jugadoresEnviar != jugadoresVivosEtapa2 {
+
+			}*/
+		if jugadoresVivos == 1 && int(jugador) == jugadores[0] {
 			fmt.Println(">> El jugador", jugador, " ha ganado el juego")
+			terminar = true
 			return &pb.Estado{Estado: "Ganador", Ronda: int32(-1)}, nil
 		}
 
-		print(jugador)
+		//print(jugador)
 
 		jugarEtapa = false
 
@@ -364,11 +406,13 @@ func (s *server) EnviarJugada(ctx context.Context, in *pb.Numero) (*pb.Estado, e
 		} else if valor_jugador == valor_pareja {
 			fmt.Println(">> El jugador ", jugador, " ha ganado el juego del Calamar")
 			estado = "Ganar"
+			terminar = true
 			ListoTodoNada2++
 		} else {
 			///gana
 			fmt.Println(">> El jugador ", jugador, " ha ganado el juego del Calamar")
 			estado = "Ganar"
+			terminar = true
 			ListoTodoNada2++
 		}
 
@@ -381,8 +425,11 @@ func (s *server) EnviarJugada(ctx context.Context, in *pb.Numero) (*pb.Estado, e
 
 	if ganar {
 		//jugadoresActivos--
-		return &pb.Estado{Estado: estado, Ronda: int32(-1)}, nil
+		jugadoresEnviar++
+		return &pb.Estado{Estado: estado, Ronda: int32(ronda)}, nil
 	}
+
+	jugadoresEnviar++
 	return &pb.Estado{Estado: estado, Ronda: int32(ronda)}, nil
 }
 
@@ -432,17 +479,24 @@ func Menu() {
 			esperaEtapa = false
 			fmt.Println("Comenzando el siguiente juego...")
 			if etapa == 1 {
+				fmt.Println(">>> Los jugadores vivos son: ", jugadores)
 				eleccion_lider = etapa1()
 				fmt.Println(">>>>>>>> El lider ha escogido ", eleccion_lider)
 
 			} else if etapa == 2 {
 				eleccion_lider = etapa2()
+				jugarEtapa = true
+				jugadoresEnviar = 0
 				fmt.Println(">>>>>>>> El lider ha escogido ", eleccion_lider)
+				jugadores = findAndDelete(jugadoresEtapa1, -1)
+				fmt.Println(">>> Los jugadores vivos son: ", jugadores)
 				if jugadoresVivos%2 == 1 {
 					matar := random_range(0, jugadoresVivos-1)
 					jugadorMuerto = jugadores[matar]
 					jugadores = remove(jugadores, matar)
 				}
+				jugadoresVivosEtapa2 = len(jugadores)
+
 				primer_equipo = jugadores[:(jugadoresVivos / 2)]
 				segundo_equipo = jugadores[(jugadoresVivos / 2):]
 
@@ -450,7 +504,9 @@ func Menu() {
 				fmt.Println("Segundo equipo: ", segundo_equipo)
 
 			} else if etapa == 3 {
+				fmt.Println(">>> Los jugadores vivos son: ", jugadores)
 				eleccion_lider = etapa3()
+				jugarEtapa = true
 				fmt.Println(">>>>>>>> Comienza la etapa 3: Todo o Nada ")
 				fmt.Println(">>>>>>>> El lider ha escogido ", eleccion_lider)
 				if jugadoresVivos%2 == 1 {
@@ -462,10 +518,15 @@ func Menu() {
 				TodoNada = TodoNada[:len(jugadores)]
 
 			}
+			time.Sleep(1000 * time.Millisecond)
+
+			if terminar {
+				os.Exit(0)
+			}
+
 			for jugarEtapa { //Esperar que todos terminen de jugar?
 			}
 
-			time.Sleep(500 * time.Millisecond)
 		} else if eleccion == 2 {
 			solicitar_jugadas(jugadores)
 		}
@@ -474,7 +535,7 @@ func Menu() {
 
 func main() {
 	jugadores = []int{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16}
-
+	jugadoresEtapa1 = []int{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16}
 	lis, err := net.Listen("tcp", port)
 	if err != nil {
 		log.Fatalf("failed to listen: %v", err)
@@ -489,18 +550,22 @@ func main() {
 
 	//Para obtener la lista de jugadores habria que implementar gRPC para saber que jugadores se quieren unir y agregarlos a la lista
 
-	fmt.Println("Este es el menu del Lider")
-	fmt.Println(" ")
-	fmt.Println("[1] Comenzar siguiente etapa de juego")
-	fmt.Println("[2] Solicitar jugadas de algun jugador")
-	fmt.Println(" ")
-	fmt.Print("Selecciones que hacer: ")
-	var eleccion int
-	fmt.Scanln(&eleccion)
+	/*
+		fmt.Println("Este es el menu del Lider")
+		fmt.Println(" ")
+		fmt.Println("[1] Comenzar siguiente etapa de juego")
+		fmt.Println("[2] Solicitar jugadas de algun jugador")
+		fmt.Println(" ")
+		fmt.Print("Selecciones que hacer: ")
+		var eleccion int
+		fmt.Scanln(&eleccion)
 
-	if eleccion == 1 {
-		fmt.Println("Comenzando el siguiente juego...")
-	} else if eleccion == 2 {
-		solicitar_jugadas(jugadores)
-	}
+		if eleccion == 1 {
+			fmt.Println("Comenzando el siguiente juego...")
+		} else if eleccion == 2 {
+			solicitar_jugadas(jugadores)
+		}
+
+	*/
+
 }

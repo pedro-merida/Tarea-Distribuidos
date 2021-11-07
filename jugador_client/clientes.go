@@ -23,15 +23,17 @@ func random(min int, max int) int {
 }
 */
 const (
-	address = "dist37:50051"
+	address = "localhost:50051"
 )
 
 var rondai int = 0
 var rondaf int = 1
+var jugadas int = 0
+var cambioRonda = true
 var wg sync.WaitGroup
 
 func jugador(i int) {
-	direccion := "dist37:50051"
+	direccion := "localhost:50051"
 	conn, err := grpc.Dial(direccion, grpc.WithInsecure(), grpc.WithBlock())
 	vivo := 1
 
@@ -70,9 +72,9 @@ func jugador(i int) {
 	puto := 1
 	for vivo == 1 {
 		time.Sleep(200 * time.Millisecond)
-		if etapa == "La Etapa 1 comenzara ahora" && rondaf > rondai && puto == 1 {
+		if etapa == "La Etapa 1 comenzara ahora" && puto == 1 {
+
 			vivo, puto = etapa1Bot(c, i)
-			rondai = rondaf
 
 			if vivo == 1 && puto == 0 {
 				//Siguiente etapa
@@ -82,8 +84,6 @@ func jugador(i int) {
 				}
 
 				etapa = rr.GetJuego()
-				rondaf = 1
-				rondai = 0
 			}
 		} else if etapa == "La Etapa 2 comenzara ahora" {
 			vivo, puto = etapa2Bot(c, i)
@@ -105,7 +105,7 @@ func jugador(i int) {
 				}
 				etapa = rr.GetJuego()
 			}
-		} else {
+		} else if etapa == "La Etapa 3 comenzara ahora" {
 			vivo, puto = etapa3Bot(c, i)
 
 		}
@@ -127,6 +127,10 @@ func etapa1Bot(c pb.JugadoresClient, jugador int) (int, int) {
 	rand.Seed(time.Now().UnixNano() + int64(jugador))
 	numero := rand.Intn(9) + 1 //Arreglar el random
 	//time.Sleep(250 * time.Millisecond)
+
+	for cambioRonda { //Esperar que cambie la ronda
+	}
+
 	r, err := c.EnviarJugada(ctx, &pb.Numero{Numero: int32(numero), Jugador: int32(jugador)})
 	if err != nil {
 		log.Fatalf("could not greet: %v", err)
@@ -135,24 +139,34 @@ func etapa1Bot(c pb.JugadoresClient, jugador int) (int, int) {
 	puto := 1
 	estado := r.GetEstado()
 
-	if int(r.GetRonda()) == -1 {
-		puto = 0
-	} else {
+	if int(r.GetRonda()) > rondaf {
+		cambioRonda = false
 		rondaf = int(r.GetRonda())
+	} else {
+		cambioRonda = true
 	}
 
+	//fmt.Println("El jugador ", estado)
 	if estado == "Vivir" {
+		//fmt.Println("Has sobrevivido... por ahora")
 		return 1, puto
 	} else if estado == "Morir" {
+		//fmt.Println("RIP")
 		return 0, puto
+	} else if estado == "Ronda" {
+		puto = 0
+		return 1, puto
 	} else {
-		return 0, puto
+		return 3, puto
 	}
 }
 
 func etapa1(c pb.JugadoresClient) (int, int) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
 	defer cancel()
+
+	for cambioRonda { //Esperar que cambie la ronda
+	}
 	fmt.Println("Elije un número del 1 al 10")
 	var numero int
 	puto := 1
@@ -165,18 +179,22 @@ func etapa1(c pb.JugadoresClient) (int, int) {
 		log.Fatalf("could not greet: %v", err)
 	}
 	estado := r.GetEstado()
-	if int(r.GetRonda()) == -1 {
-		//fmt.Println("Gana la etapa")
-		puto = 0 //Gana la etapa
-	} else {
+
+	if int(r.GetRonda()) > rondaf {
+		cambioRonda = false
 		rondaf = int(r.GetRonda())
 	}
+
+	//fmt.Println("El jugador ", estado)
 	if estado == "Vivir" {
 		//fmt.Println("Has sobrevivido... por ahora")
 		return 1, puto
 	} else if estado == "Morir" {
 		//fmt.Println("RIP")
 		return 0, puto
+	} else if estado == "Ronda" {
+		puto = 0
+		return 1, puto
 	} else {
 		return 3, puto
 	}
@@ -347,9 +365,12 @@ func main() {
 		log.Printf("%s", rr.GetJuego())
 		puto := 1
 		for vivo == 1 {
-			if etapa == "La Etapa 1 comenzara ahora" && rondaf > rondai && puto == 1 {
+			if etapa == "La Etapa 1 comenzara ahora" && puto == 1 {
 				fmt.Println("Comienza la ronda ", rondaf)
-				//rondai = rondaf
+
+				if rondaf == 1 {
+					cambioRonda = false
+				}
 				vivo, puto = etapa1(c)
 
 				if vivo == 1 {
@@ -366,8 +387,6 @@ func main() {
 
 						etapa = rr.GetJuego()
 						fmt.Println(etapa)
-						rondai = 0
-						rondaf = 1
 					}
 				} else if vivo == 0 {
 					fmt.Println("RIP")
@@ -378,7 +397,7 @@ func main() {
 				fmt.Println(etapa)
 				//rondai = rondaf
 				vivo = etapa2(c)
-
+				rondai = rondaf
 				if vivo == 1 {
 					fmt.Println("Has ganado la etapa")
 
@@ -394,7 +413,7 @@ func main() {
 				} else {
 					fmt.Println("¡Has ganado el calamar!")
 				}
-			} else {
+			} else if etapa == "La Etapa 3 comenzara ahora" {
 				vivo = etapa3(c)
 
 				if vivo == 3 {
