@@ -23,7 +23,7 @@ func random(min int, max int) int {
 }
 */
 const (
-	address = "localhost:50051"
+	address = "dist37:50051"
 )
 
 var rondai int = 0
@@ -33,7 +33,7 @@ var cambioRonda = true
 var wg sync.WaitGroup
 
 func jugador(i int) {
-	direccion := "localhost:50051"
+	direccion := "dist37:50051"
 	conn, err := grpc.Dial(direccion, grpc.WithInsecure(), grpc.WithBlock())
 	vivo := 1
 
