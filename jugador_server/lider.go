@@ -181,13 +181,13 @@ func (s *server) EnviarJugada(ctx context.Context, in *pb.Numero) (*pb.Estado, e
 			sumaetapa1[index] = sumaetapa1[index] + int(mensaje)
 			estado = "Vivir"
 			//Si su suma es mayor a 21
-			if sumaetapa1[index] >= 15 {
+			if sumaetapa1[index] >= 21 {
 				estado = "Ronda"
 				fmt.Println(">> Jugador ", jugador, " ha ganado la etapa")
 				jugadoresGanadores++
 				ganar = true //Si ha ganado la etapa
 				//return &pb.Estado{Estado: "Vivir", Ronda: int32(-1)}, nil
-			} else if sumaetapa1[index] < 15 && ronda == 4 { //En la ultima ronda no llegaron a 21   ///**********************//////////////Se modifico para testeos AAAAAAHHHHHHHHH
+			} else if sumaetapa1[index] < 21 && ronda == 4 { //En la ultima ronda no llegaron a 21   ///**********************//////////////Se modifico para testeos AAAAAAHHHHHHHHH
 				//RIP
 				jugadoresMuertos++
 				//Quitar jugador que murio de la lista
